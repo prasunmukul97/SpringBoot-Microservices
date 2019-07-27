@@ -1,4 +1,4 @@
-package com.springbootLearn.bookTicket.app.TicketBookingManagementAppMysql;
+package com.springbootLearn.bookTicket.app;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

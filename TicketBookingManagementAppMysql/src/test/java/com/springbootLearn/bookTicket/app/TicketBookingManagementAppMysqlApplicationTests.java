@@ -1,4 +1,4 @@
-package com.springbootLearn.bookTicket.app.TicketBookingManagementAppMysql;
+package com.springbootLearn.bookTicket.app;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
