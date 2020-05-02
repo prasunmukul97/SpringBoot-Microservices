@@ -71,6 +71,15 @@ Important points on spring security.
 
 For this to resolve, we need to provide proper websecurity configuration.
 
+Sample create user format:
+
+{
+	"firstName":"Prasun",
+	"lastName":"Saurabh",
+	"email":"Prasun.Saurabh@gmail.com",
+	"password":"8197400744"
+}
+
 Spring Security:
 -----------------------------------------------------------------------------
 
@@ -106,4 +115,302 @@ mysql> SHOW VARIABLES WHERE Variable_name = 'port';
 | port          | 3306  |
 +---------------+-------+
 1 row in set (0.00 sec)
+
+Spring boot config file properties:
+------------------------------------
+1. Each microservice has its own application.properties file.
+When we configure microsservices with config server then each microservices will be reading configuration from two files.
+one is application.properties file served by config server and another is config file present in microservice.
+If any of the property with the same name is available at both , then property value in config server has a higher priority.
+
+We can have more specific configuration for each microservices file.
+
+For ex:
+ Suppose microservice is with name A.
+	Then we can have A.properties as property file. 
+	
+If we add spring boot proflie <profile> to microservices, then we can have property file with the profile name as below:
+
+	A-<profile>.properties.
+	
+Priority Order of property value if present in all properties file.
+
+A-<profile>.properties > A.properties > application.properties(config server) > application.properties (local microservice).
+
+We need to add below dependency in microservice to get support of config server:
+<!-- https://mvnrepository.com/artifact/org.springframework.cloud/spring-cloud-starter-config -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-config</artifactId>
+    <version>2.2.2.RELEASE</version>
+</dependency>
+
+We need to add another file called bootstrap.properties. 
+This file will be loaded before application.properties file. 
+It is loaded even before beans are created.
+
+Below properties in config server application file is needed to connect to git repo:
+
+spring.cloud.config.server.git.uri=https://github.com/prasunmukul97/PhotoAppConfiguration
+spring.cloud.config.server.git.username=prasunmukul@gmail.com
+spring.cloud.config.server.git.password=Shiva$456
+spring.cloud.config.server.git.clone-on-start=true
+
+Below properites are needed in bootstrap.properties file of users microservice to connect to config server:
+
+spring.cloud.config.uri=http://localhost:8012
+spring.cloud.config.name=PhotoAppConfigServer
+
+Spring cloud bus. Dynamic configuration update:
+-----------------------------------------------
+1.Spring cloud bus will help us to push configuration changes to all microservices while they are running.
+
+2.For microservices to receive these configuration changes and uses the new value, they don't need to restart.
+
+3.To configure spring cloud bus we will not need to create a stand alone microservice to make it work.
+
+4.We will need to add spring cloud bus and spring boot actuator dependencies 
+
+		<!-- https://mvnrepository.com/artifact/org.springframework.cloud/spring-cloud-starter-bus-amqp -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-bus-amqp</artifactId>
+			<version>2.2.1.RELEASE</version>
+		</dependency>
+		<!-- https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-starter-actuator -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+			<version>2.2.6.RELEASE</version>
+		</dependency>
+	and also other minor configurations detail to config server that will need to receive those dynamic configuration updates.
+	
+	We would need to add starter bus dependency to all that microservices that we want to subscribe the configuration refresh change.
+	
+	Spring boot actuator is used for auditing.we can see useful details about our system.
+	
+5.This will make our microservices work as listners or work as subscribers to receive updates from spring cloud config server
+	and these updates will be broadcasted to all subscribed microservices with the help of messaging technology and protocol used is AMQP(Advanced message queuing protocol).
+	This Messenger is asynchronous and it decouple application by separating sending and receiving data and there is a message broker that will also need to configure and this is called 
+	RabbitMQ.
+	
+	RabbitMQ.
+	---------
+	1. It is a Messaging Broker.
+	2. It is an intermediary for messaging.
+	3. It gives applications a common platform to send and receive messages and for messages a safe place to live until they are received.
+
+Enable /bus-refresh URL endpoint:
+----------------------------------
+/bus-refresh is present actuator endpoint.
+If we want to broadcast the updated configuration we use /bus-refresh actuator endpoint.
+We send HTTP POST request to /bus-refresh.
+
+To enable bus refresh end point to our config server we need to add below property in config server application.properties file.
+
+management.endpoints.web.exposure.include=bus-refresh
+
+Problem faced during installation of RabbitMQ:
+1. Please set ERLANG_SERVICE_MANAGER_PATH to the folder containing "erlsrv.exe".
+2.	ERLANG_HOME not set correctly.
+    ******************************        
+         Please either set ERLANG_HOME to point to your Erlang installation or place the
+         RabbitMQ server distribution in the Erlang lib folder.
+		 
+To resolve above two problems, we set below paths in environment varaible.
+
+ERLANG_HOME=C:\Program Files\erl10.7\erts-10.7
+ERLANG_SERVICE_MANAGER_PATH=C:\Program Files\erl10.7\erts-10.7\bin
+Add below to the path variable as well:
+C:\Program Files\erl10.7\erts-10.7\bin
+
+Then try access below URL:
+http://localhost:15672/
+
+If still error persists then open RabbitMQ MQ Command Prompt (sbin dir) and give below plugin command:
+
+rabbitmq-plugins enable rabbitmq_management
+
+Above can be fround at URL:
+https://www.rabbitmq.com/management.html
+
+Then again try using http://localhost:15672/ . If the UI opens then login with guest username and password.
+Else, Again stop and start rabbit mq.
+
+Setting up File System Backend:
+--------------------------------
+1. We need to set the active profile as native.
+We add below properties to application.properties of config server.
+
+spring.profiles.active=native
+spring.cloud.config.server.native.search-locations=file:///G:/SBLearn
+
+
+The file name at the location <file:///G:/SBLearn> must be with <config_server_name>.properties.
+For eg:  PhotoAppConfigServer.properties
+
+To test if native file system is working we hit GET request to below URL:
+
+http://localhost:8012/PhotoAppConfigServer/native
+
+It should return response as:
+
+{
+    "name": "PhotoAppConfigServer",
+    "profiles": [
+        "native"
+    ],
+    "label": null,
+    "version": null,
+    "state": null,
+    "propertySources": [
+        {
+            "name": "file:///G:/SBLearn/PhotoAppConfigServer.properties",
+            "source": {
+                "token.expiration.timeInMillis": "86400000",
+                "token.secret": "asdfsd7r8e8727272",
+                "login.url": "/user/login",
+                "config.server.test.property": "TestFromConfigFileRefresh2"
+            }
+        }
+    ]
+}
+
+When spring.profiles.active=git, then git backend system is active. When we give native, the file system backend is active.
+
+When both profile is active, then property from both the backend is fetched.
+http://localhost:8012/PhotoAppConfigServer/native - request
+
+response:
+{
+    "name": "PhotoAppConfigServer",
+    "profiles": [
+        "native"
+    ],
+    "label": null,
+    "version": null,
+    "state": null,
+    "propertySources": [
+        {
+            "name": "file:///G:/SBLearn/PhotoAppConfigServer.properties",
+            "source": {
+                "token.expiration.timeInMillis": "86400000",
+                "token.secret": "asdfsd7r8e8727272",
+                "login.url": "/user/login",
+                "config.server.test.property": "TestFromConfigFileRefresh2"
+            }
+        },
+        {
+            "name": "https://github.com/prasunmukul97/PhotoAppConfiguration/application.properties",
+            "source": {
+                "token.expiration.timeInMillis": "86400000",
+                "token.secret": "asdfsd7r8e8727272",
+                "login.url": "/user/login",
+                "config.server.test.property": "TestFromConfigFileRefresh1"
+            }
+        }
+    ]
+}
+
+Native file system takes precedence over git backend system.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
  
