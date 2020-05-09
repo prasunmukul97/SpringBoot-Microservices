@@ -314,6 +314,604 @@ response:
 
 Native file system takes precedence over git backend system.
 
+If we have microservice specific properties file, then preference will be given to this file.
+If config server has two properties file.
+1. application.properties
+2. <users-ws>.properties
+
+If any property present at both the files, then users microservice will take value from <users-ws>.properties.
+To access both the files from config server, we need to provide below property in users-ms bootstrap.properties file:
+spring.cloud.config.uri=http://localhost:8012
+spring.cloud.config.name=users-ws
+
+When we hit URL: http://localhost:8012/users-ws/default
+Below response is received:
+{
+    "name": "users-ws",
+    "profiles": [
+        "default"
+    ],
+    "label": null,
+    "version": null,
+    "state": null,
+    "propertySources": [
+        {
+            "name": "file:///G:/SBLearn/users-ws.properties",
+            "source": {
+                "token.expiration.timeInMillis": "86400000",
+                "token.secret": "asdfsd7r8e8727272",
+                "login.url": "/user/login",
+                "config.server.test.property": "TestfromUsersMicroservicespecificconfigfile"
+            }
+        },
+        {
+            "name": "file:///G:/SBLearn/application.properties",
+            "source": {
+                "token.expiration.timeInMillis": "86400000",
+                "token.secret": "asdfsd7r8e8727272",
+                "login.url": "/user/login",
+                "config.server.test.property": "TestFromConfigFileRefresh2"
+            }
+        }
+    ]
+}
+
+Hence both the properties file are accesible to users microservice.
+application.properties is shared across all microservices.
+
+
+Spring boot actuator:
+---------------------
+It provides many useful features which we can use to monitor and manage spring boot application.
+
+Features:
+	/health - Health check. Status of mircroservice. we get information about instance.
+	/beans - Displays a complete list of beans that are available in our microservice.
+	/httptrace - Displays HTTP trace information(By default, the last 100 HTTP request and response exchanges)
+	
+	etc...
+To enable spring boot actuator, we need to add actuator dependency to project file.
+
+	<!-- https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-starter-actuator -->
+	<dependency>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-actuator</artifactId>
+	</dependency>
+	
+Add below properties to application.properties file:
+management.endpoints.web.exposure.include=beans,health,routes,httptrace
+api.zuul.actuator.url=/actuator/*
+
+.antMatchers(env.getProperty("api.zuul.actuator.url")).permitAll() ->need to add in web security file.
+
+We can call actuator endpoint as below:
+http://localhost:8011/actuator/routes
+Below is the response of above URL:
+{"/account-ws/**":"account-ws","/users-ws/**":"users-ws"}
+
+Use of MYSQL:
+---------------
+
+Below are the SQL COMMANDS:
+
+show databases;
+use photo_app;
+
+show tables;
+
+-create user 'prasun'@'localhost' identified by 'password';
+
+-grant all privileges on photo_app.* to 'prasun'@'localhost';
+
+-flush privileges;
+
+Login to MySQL with above user and password.
+
+Provide below my sql connector dependency to the microservice pom.xml file:
+<!-- https://mvnrepository.com/artifact/mysql/mysql-connector-java -->
+<dependency>
+    <groupId>mysql</groupId>
+    <artifactId>mysql-connector-java</artifactId>
+    <version>8.0.20</version>
+</dependency>
+
+Encryption and Decryption:
+--------------------------
+Spring cloud config support two different types of encryption.
+1. Symmetric Encryption(Shared)
+2. Asymetric Encryption(RSA keypair)
+
+1. Symmetric Encryption:
+	It is bit quicker to setup and bit easier to use. 
+	We want to come up with a unique alphanumeric String of characters which will be used as encryption key.
+	The same key will be used to encrypt and decrypt the information.
+	It is done all behind the scenes for us by the framework and is made extremely simple to use.
+	
+2. Asymetric Encryption:
+	Asymetric Encryption is a superior type of encryption and it requires us to use java command line utility called keytool.
+	We will use key tool to generate a password protected key store file.
+	This key store file will contain a private key which will be used for encryption and decryption of information.
+	Encryption will be done with public key. 
+	Private key is needed to decrypt that information.
+	
+Steps:
+1. Download Java Cryptographic Extension file from below path:
+	https://www.oracle.com/java/technologies/javase-jce8-downloads.html
+	
+2. Extract the zip file and get two jar files.
+   a. local_policy.jar
+   b. US_export_policy.jar
+   
+3. copy these two jar files from extracted folder and past it to below path:
+	C:\Program Files\Java\jdk1.8.0_162\jre\lib\security
+
+For Symmetric Encryption use below methods:
+1. In config server edit bootstrap.properties file and add below property:
+	encrypt.key=asdfFGH890234rs
+2. Go to postman and trigger a POST request to the below URL to decrypt information present at body of POST:
+	http://localhost:8012/encrypt
+3. To decrypt use below URL:
+	http://localhost:8012/decrypt
+	
+To encrypt value in property file, use property value with {cipher} prefix.
+config.server.test.property={cipher}414fc6e63617f29b23ade25fbd65126bb8ac44103ff33f9e6c1403bb1592067c12779fb6794f39158d4096a07f343bb196f4abbd98404088f8c6c1e7e76428b4
+Below is encrypted value of actual text.
+414fc6e63617f29b23ade25fbd65126bb8ac44103ff33f9e6c1403bb1592067c12779fb6794f39158d4096a07f343bb196f4abbd98404088f8c6c1e7e76428b4
+Config server automatically decrypt it using the same key when we fetch the value of this property.
+
+For Asymetric Encryption we use below methods:
+1. Creating a keystore for Asymetric encryption.
+	Use below keytool command to generate keystore file:
+	Here -dname= distinguised name
+			CN= Common name
+			OU= Organizational unit
+			O=Organization
+			L=locality
+			S=State
+			C=Country
+		-keypass= password under which private key is protected.
+		apiEncryptionKey.jks = name of the file that will contain private and public keys.
+		-storepass= password used to protect the integrity of keystore file.
+		
+G:\KeyStoreFiles>keytool -genkeypair -alias apiEncryptionKey -keyalg RSA -keypass 1q2w3e4r -keystore apiEncryptionKey.jks -storepass 1q2w3e4r
+
+What is your first and last name?
+  [Unknown]:  Prasun Saurabh
+What is the name of your organizational unit?
+  [Unknown]:  API Developement
+What is the name of your organization?
+  [Unknown]:  TestLocal
+What is the name of your City or Locality?
+  [Unknown]:  Bangalore
+What is the name of your State or Province?
+  [Unknown]:  KA
+What is the two-letter country code for this unit?
+  [Unknown]:  C
+Is CN=Prasun Saurabh, OU=API Developement, O=TestLocal, L=Bangalore, ST=KA, C=C correct?
+  [no]:  yes
+
+
+Warning:
+The JKS keystore uses a proprietary format. It is recommended to migrate to PKCS12 which is an industry standard format using "keytool -importkeystore -srckeystore apiEncryptionKey.jks -destkeystore apiEncryptionKey.jks -deststoretype pkcs12".
+
+G:\KeyStoreFiles>keytool -importkeystore -srckeystore apiEncryptionKey.jks -destkeystore apiEncryptionKey.jks -deststoretype pkcs12
+Enter source keystore password:
+Entry for alias apiencryptionkey successfully imported.
+Import command completed:  1 entries successfully imported, 0 entries failed or cancelled
+
+Warning:
+Migrated "apiEncryptionKey.jks" to Non JKS/JCEKS. The JKS keystore is backed up as "apiEncryptionKey.jks.old".
+
+Note:Password should be minimum 6 character long.
+
+2. Use of encryption key file for Asymetric encryption and decryption.
+Add below properties to bootstrap.properties file in config server:
+#For Symmetric encryption and decryption.
+#encrypt.key=asdfFGH890234rs
+
+#For Asymetric encryption and decryption
+
+encrypt.key-store.location=file:///G:/KeyStoreFiles/apiEncryptionKey.jks
+encrypt.key-store.password=1q2w3e4r
+encrypt.key-store.alias=apiEncryptionKey
+
+Then follow the same process for encryption and decryption as symmetric.
+
+Microservices Communication:
+----------------------------
+1. Using RestTemplate method:
+
+@Override
+	public UserDto getUserByUserId(String userId) throws UsersServiceException{
+		UserEntity findByUserId = userRepository.findByUserId(userId);
+		if(findByUserId==null ) throw new UsersServiceException("user not found");		
+		UserDto userDto=new ModelMapper().map(findByUserId,UserDto.class);
+		
+		//Use of RestTemplate exchange method to hit request to albums microservice from users microservice.
+		
+		String albumUrl=String.format(env.getProperty("albums.url"), userId);
+		ResponseEntity<List<AlbumResponseModel>> albumListResponse = restTemplate.exchange(albumUrl, HttpMethod.GET,null,new ParameterizedTypeReference<List<AlbumResponseModel>>() {
+		});
+		List<AlbumResponseModel> albumList = albumListResponse.getBody();
+		userDto.setAlbums(albumList);
+		return userDto;
+	}
+	
+2. Using Feign client:
+ - Feign is an HTTP client. It helps spring boot application to programatically send the request to remote or an internal microservice and then get back response.	
+ - Declarative. The biggest difference between feign and resttemplate is that feign is declarative.
+ - LoadBalanced.
+ 
+ To create a feign client we need to create a java interface and annotate it with @FeignClient annotation.
+	
+	@FeignClient(name="albums-ws")
+	public interface AlbumServiceClient{
+		@GetMapping("/users/{id}/albums")
+		public List<AlbumResponseModel> getAlbums(@PathVariable String id);
+	}
+
+Fein supports client side load balancing.
+Spring cloud integrates with Ribbon and Eureka to provide load balancing.
+
+If we need to send request to external remote URL, we just need to add URL in feign client annotation.
+@FeignCLient(name="PhotoAlbums" url="https://website.com")
+
+HTTP Request logging in Feign client.
+We add below property to application.properties:
+logging.level.com.app.photoapp.api.users.data.AlbumsServiceClient=DEBUG
+
+Then we create Logger.Level bean in spring application main class file as below:
+@Bean
+	Logger.Level feignLoggerLevel(){
+		return Logger.Level.FULL;
+	}
+This logs the API request and response.
+
+Feign Error Decoder:
+--------------------
+Create a class FeignErrorDecoder that implements ErrorDecoder interface from feign.codec package.
+package com.app.photoapp.api.users.shared;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
+import org.springframework.web.server.ResponseStatusException;
+
+import feign.Response;
+import feign.codec.ErrorDecoder;
+
+@Component
+public class FeignErrorDecoder implements ErrorDecoder {
+	
+	Environment environment;
+	
+	@Autowired
+	public FeignErrorDecoder(Environment environment) {
+		this.environment=environment;
+	}
+	
+
+	@Override
+	public Exception decode(String methodKey, Response response) {
+		switch(response.status()) {
+		case 400:
+			break;
+		case 404:
+			if(methodKey.contains("getAlbums")) {
+				return new ResponseStatusException(HttpStatus.valueOf(response.status()), environment.getProperty("error.msg.albumNotFound"));
+			}
+			break;
+		case 500:
+			break;
+		default:
+			return new Exception(response.reason());		
+		}
+		return null;
+	}
+
+}
+
+error.msg.albumNotFound=Users Albums not found
+
+This will handel exceptions based on response status. 
+Here methodKey is the className#methodnameWithSignature.
+For eg: AlbumServiceClient#getAlbums(String)
+
+Enable Hystrix Circuit Breaker:
+---------------------------------
+Add below dependency to pom.xml:
+
+<!-- https://mvnrepository.com/artifact/org.springframework.cloud/spring-cloud-starter-netflix-hystrix -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-netflix-hystrix</artifactId>
+	</dependency>
+Add below property to application.properties:
+
+feign.hystrix.enabled=true
+
+Add @EnableCircuitBreaker to main class:
+
+@EnableCircuitBreaker
+public class PhotoAppApiUsersApplication {
+ 
+	public static void main(String[] args) {
+
+Add fallback class to the feign client.
+
+use fallback=<ClassName>.class inside @FeignClient
+@FeignCLient(name="PhotoAlbums" ,url="https://website.com" ,fallback=Albumfallback.class)
+
+The Fallback class should implement client interface.
+class Albumfallback implements AlbumsServiceClient{
+
+	//Add unimplemented method and provide the fall back logic.
+}
+
+If the backend service comes up and running, the circuit will be close and circuit breaker fallback method will not get executed.
+The response from backend service comes up.
+
+Error handling with Feign Hystrix FallbackFactory:
+-----------------------------------------------------
+@FeignClient(name="albums-ws",fallbackFactory=AlbumsFallbackFactory.class)
+public interface AlbumsServiceClient {
+
+	@GetMapping("/users/{id}/albums")
+	public List<AlbumResponseModel> getAlbums(@PathVariable("id") String id);
+
+}
+
+@Component
+class Albumsfallback implements AlbumsServiceClient {
+
+	@Override
+	public List<AlbumResponseModel> getAlbums(String id) {
+		return new ArrayList<>();
+	}
+
+}
+@Component
+class AlbumsFallbackFactory implements FallbackFactory<AlbumsServiceClient>{
+
+	@Override
+	public AlbumsServiceClient create(Throwable cause) {
+		return new AlbumsSerivceFallbackClient(cause);
+	}
+	
+}
+
+
+class AlbumsSerivceFallbackClient implements AlbumsServiceClient{
+	
+	Logger logger=LoggerFactory.getLogger(this.getClass());
+	Throwable cause;
+	
+	public AlbumsSerivceFallbackClient(Throwable cause) {
+		this.cause=cause;
+	}
+	@Override
+	public List<AlbumResponseModel> getAlbums(String id) {
+		if(cause instanceof FeignException && ((FeignException)cause).status()==404) {
+			logger.error("404 error took place when getAlbums was called with userId "+ id 
+					+ " Error Message:"+
+						cause.getLocalizedMessage());
+		}else {
+			logger.error("Other error took place "+cause.getLocalizedMessage());
+		}
+		return new ArrayList<>();
+	}
+	
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
